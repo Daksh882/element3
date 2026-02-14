@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elemental 3D - Interactive Periodic Table</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: #000;
+            overflow: hidden;
+            color: #fff;
+        }
+        
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        .ui-layer {
+            position: fixed;
+            z-index: 10;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        
+        .glass-panel {
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+        }
+        
+        .neon-text {
+            text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 40px currentColor;
+        }
+        
+        .element-card {
+            background: linear-gradient(135deg, rgba(30, 30, 60, 0.95), rgba(10, 10, 25, 0.98));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .element-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.3);
+        }
+        
+        .category-btn {
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .category-btn:hover, .category-btn.active {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px currentColor;
+            border-color: currentColor;
+        }
+        
+        .view-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            color: white;
+        }
+        
+        .view-btn:hover, .view-btn.active {
+            background: rgba(0, 255, 255, 0.3);
+            border-color: #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            color: #00ffff;
+        }
+        
+        .detail-panel {
+            transform: translateX(100%);
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .detail-panel.open {
+            transform: translateX(0);
+        }
+        
+        .search-panel {
+            transform: translateY(-100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .search-panel.open {
+            transform: translateY(0);
+        }
+        
+        .atomic-model {
+            width: 200px;
+            height: 200px;
+            position: relative;
+        }
+        
+        .orbit {
+            position: absolute;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            animation: rotate 8s linear infinite;
+        }
+        
+        .electron {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #00ffff;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #00ffff, 0 0 30px #00ffff;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+        }
+        
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(0, 255, 255, 0.3);
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+            background-size: 200% 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: shimmer 2s linear infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .mobile-controls {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .desktop-controls {
+                display: none;
+            }
+            .mobile-controls {
+                display: flex;
+            }
+            .detail-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            .category-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
+        .glow-text {
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #00ffff; }
+            to { text-shadow: 0 0 20px #fff, 0 0 30px #00ffff, 0 0 40px #00ffff, 0 0 50px #00ffff; }
+        }
+        
+        .search-result-item {
+            transition: all 0.2s ease;
+        }
+        
+        .search-result-item:hover {
+            background: rgba(0, 255, 255, 0.2);
+            transform: translateX(10px);
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 255, 0.5);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <h1 class="text-4xl md:text-6xl font-bold mb-4 glow-text" style="font-family: 'Orbitron', sans-serif;">
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500">ELEMENTAL</span>
+        </h1>
+        <div class="loader"></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="mt-4 text-cyan-400 text-sm animate-pulse">Initializing 3D Environment...</p>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Layer -->
+    <div class="ui-layer">
+        
+        <!-- Header -->
+        <div class="absolute top-0 left-0 w-full p-4 md:p-6 flex justify-between items-start pointer-events-auto bg-gradient-to-b from-black/80 to-transparent">
+            <div>
+                <h1 class="text-2xl md:text-4xl font-bold tracking-wider" style="font-family: 'Orbitron', sans-serif;">
+                    <span class="text-cyan-400 neon-text">ELEMENTAL</span>
+                    <span class="text-white opacity-90 text-lg md:text-2xl ml-2">3D</span>
+                </h1>
+                <p class="text-xs md:text-sm text-cyan-300/70 mt-1">Interactive Periodic Table</p>
+            </div>
+            
+            <!-- Top Controls -->
+            <div class="flex gap-2 flex-wrap justify-end items-center">
+                <button id="searchBtn" class="view-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    SEARCH
+                </button>
+                <button class="view-btn active px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold" data-view="table">
+                    TABLE
+                </button>
+                <button class="view-btn px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold" data-view="sphere">
+                    SPHERE
+                </button>
+                <button class="view-btn px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold" data-view="helix">
+                    HELIX
+                </button>
+                <button class="view-btn px-3 py-2 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold" data-view="grid">
+                    GRID
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Panel -->
+        <div id="searchPanel" class="search-panel fixed top-0 left-0 w-full glass-panel pointer-events-auto z-50 border-b border-cyan-400/30">
+            <div class="p-6 max-w-4xl mx-auto">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="flex-1 relative">
+                        <input type="text" id="searchInput" placeholder="Search by name, symbol, or atomic number..." 
+                            class="w-full bg-black/50 border border-cyan-400/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/50 text-lg">
+                        <svg class="w-6 h-6 text-cyan-400 absolute right-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <button id="closeSearch" class="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                        <svg class="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div id="searchResults" class="max-h-[60vh] overflow-y-auto space-y-2">
+                    <!-- Search results will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Filter (Desktop) -->
+        <div class="absolute top-24 left-4 md:left-6 desktop-controls">
+            <div class="glass-panel rounded-xl p-4 pointer-events-auto max-h-[80vh] overflow-y-auto">
+                <h3 class="text-xs font-bold text-cyan-400 mb-3 uppercase tracking-wider border-b border-cyan-400/30 pb-2">Filter by Category</h3>
+                <div class="category-grid grid grid-cols-1 gap-2">
+                    <button class="category-btn active px-3 py-2 rounded text-xs font-bold bg-gray-800 text-white border-gray-500" data-category="all" style="color: white; text-shadow: 0 0 10px rgba(255,255,255,0.5);">All Elements</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-red-900/40 text-red-300 border-red-500" data-category="alkali" style="color: #ff0040; text-shadow: 0 0 10px rgba(255,0,64,0.8);">Alkali Metals</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-orange-900/40 text-orange-300 border-orange-500" data-category="alkaline" style="color: #ff8000; text-shadow: 0 0 10px rgba(255,128,0,0.8);">Alkaline Earth</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-yellow-900/40 text-yellow-300 border-yellow-500" data-category="transition" style="color: #ffff00; text-shadow: 0 0 10px rgba(255,255,0,0.8);">Transition Metals</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-blue-900/40 text-blue-300 border-blue-500" data-category="post-transition" style="color: #00aaff; text-shadow: 0 0 10px rgba(0,170,255,0.8);">Post-Transition</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-green-900/40 text-green-300 border-green-500" data-category="metalloid" style="color: #00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.8);">Metalloids</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-cyan-900/40 text-cyan-300 border-cyan-500" data-category="nonmetal" style="color: #00ffff; text-shadow: 0 0 10px rgba(0,255,255,0.8);">Nonmetals</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-purple-900/40 text-purple-300 border-purple-500" data-category="halogen" style="color: #ff00ff; text-shadow: 0 0 10px rgba(255,0,255,0.8);">Halogens</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-pink-900/40 text-pink-300 border-pink-500" data-category="noble" style="color: #ff88ff; text-shadow: 0 0 10px rgba(255,136,255,0.8);">Noble Gases</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-indigo-900/40 text-indigo-300 border-indigo-500" data-category="lanthanide" style="color: #aa00ff; text-shadow: 0 0 10px rgba(170,0,255,0.8);">Lanthanides</button>
+                    <button class="category-btn px-3 py-2 rounded text-xs font-bold bg-teal-900/40 text-teal-300 border-teal-500" data-category="actinide" style="color: #00ffaa; text-shadow: 0 0 10px rgba(0,255,170,0.8);">Actinides</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="absolute bottom-4 left-4 md:left-6 text-xs text-cyan-400/60 pointer-events-auto hidden md:block bg-black/50 px-3 py-2 rounded-lg border border-cyan-400/20">
+            <p class="glow-text">Left Click: Select | Drag: Rotate | Scroll: Zoom | Right Click: Pan</p>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div class="absolute bottom-20 left-4 right-4 mobile-controls pointer-events-auto">
+            <div class="glass-panel rounded-xl p-3 flex justify-between items-center border border-cyan-400/30">
+                <button id="mobileFilterBtn" class="px-4 py-2 bg-cyan-600 rounded-lg text-sm font-bold text-white shadow-lg shadow-cyan-500/50">Filters</button>
+                <button id="mobileSearchBtn" class="px-4 py-2 bg-purple-600 rounded-lg text-sm font-bold text-white shadow-lg shadow-purple-500/50">Search</button>
+                <button id="mobileResetBtn" class="px-4 py-2 bg-pink-600 rounded-lg text-sm font-bold text-white shadow-lg shadow-pink-500/50">Reset</button>
+            </div>
+        </div>
+
+        <!-- Detail Panel -->
+        <div id="detailPanel" class="detail-panel fixed right-0 top-0 h-full w-full md:w-[450px] glass-panel pointer-events-auto overflow-y-auto border-l border-cyan-400/30">
+            <button id="closeDetail" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center hover:bg-cyan-500/40 transition-colors z-20 border border-cyan-400/50">
+                <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <div class="p-6 md:p-8">
+                <!-- Header -->
+                <div class="flex items-start justify-between mb-6 relative">
+                    <div>
+                        <div id="detailNumber" class="text-7xl md:text-9xl font-bold text-white/5 absolute -top-4 -left-4 select-none">1</div>
+                        <h2 id="detailSymbol" class="text-6xl md:text-8xl font-bold text-cyan-400 neon-text relative z-10" style="font-family: 'Orbitron', sans-serif;">H</h2>
+                        <h3 id="detailName" class="text-2xl md:text-4xl font-bold text-white mt-2 glow-text">Hydrogen</h3>
+                        <p id="detailCategory" class="text-cyan-300 text-sm uppercase tracking-wider mt-1 font-bold">Nonmetal</p>
+                    </div>
+                    <div id="detailGlow" class="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 opacity-60 blur-2xl absolute top-0 right-0 animate-pulse"></div>
+                </div>
+
+                <!-- Atomic Model Visualization -->
+                <div class="flex justify-center mb-8 bg-black/30 rounded-2xl p-4 border border-white/10">
+                    <div class="atomic-model" id="atomicModel">
+                        <!-- Generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Properties Grid -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-1">Atomic Mass</p>
+                        <p id="detailMass" class="text-xl font-bold text-white glow-text">1.008</p>
+                    </div>
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-1">Electron Config</p>
+                        <p id="detailConfig" class="text-lg font-bold text-cyan-300">1s¹</p>
+                    </div>
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-1">Electronegativity</p>
+                        <p id="detailElectro" class="text-xl font-bold text-white glow-text">2.20</p>
+                    </div>
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-1">Atomic Radius</p>
+                        <p id="detailRadius" class="text-xl font-bold text-white glow-text">53 pm</p>
+                    </div>
+                </div>
+
+                <!-- Additional Info -->
+                <div class="space-y-4">
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-2">Discovery</p>
+                        <p id="detailDiscovery" class="text-sm text-gray-200">1766 by Henry Cavendish</p>
+                    </div>
+                    
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-2">Description</p>
+                        <p id="detailDesc" class="text-sm text-gray-300 leading-relaxed">
+                            Hydrogen is the chemical element with the symbol H and atomic number 1. With a standard atomic weight of 1.008, hydrogen is the lightest element in the periodic table.
+                        </p>
+                    </div>
+
+                    <div class="element-card rounded-lg p-4 border border-cyan-400/20">
+                        <p class="text-cyan-400/70 text-xs uppercase font-bold mb-2">Common Uses</p>
+                        <ul id="detailUses" class="text-sm text-gray-300 space-y-1">
+                            <li>• Rocket fuel</li>
+                            <li>• Production of ammonia</li>
+                            <li>• Hydrogen fuel cells</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <button id="exploreAtomBtn" class="w-full mt-6 py-4 bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 rounded-lg font-bold text-white hover:from-cyan-500 hover:via-blue-500 hover:to-purple-500 transition-all transform hover:scale-[1.02] shadow-lg shadow-cyan-500/50 border border-cyan-400/50 glow-text">
+                    EXPLORE ATOM STRUCTURE
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Filter Modal -->
+        <div id="mobileFilterModal" class="fixed inset-0 bg-black/90 z-50 hidden items-end pointer-events-auto backdrop-blur-sm">
+            <div class="glass-panel w-full rounded-t-2xl p-6 transform translate-y-full transition-transform duration-300 border-t border-cyan-400/30" id="mobileFilterContent">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-cyan-400 glow-text">Filter Elements</h3>
+                    <button id="closeMobileFilter" class="text-cyan-400 hover:text-white p-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+                    <button class="category-btn mobile-cat active px-3 py-3 rounded text-xs font-bold bg-gray-800 text-white border-gray-500" data-category="all" style="color: white;">All</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-red-900/40 border-red-500" data-category="alkali" style="color: #ff0040;">Alkali</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-orange-900/40 border-orange-500" data-category="alkaline" style="color: #ff8000;">Alkaline</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-yellow-900/40 border-yellow-500" data-category="transition" style="color: #ffff00;">Transition</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-blue-900/40 border-blue-500" data-category="post-transition" style="color: #00aaff;">Post-T</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-green-900/40 border-green-500" data-category="metalloid" style="color: #00ff00;">Metalloid</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-cyan-900/40 border-cyan-500" data-category="nonmetal" style="color: #00ffff;">Nonmetal</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-purple-900/40 border-purple-500" data-category="halogen" style="color: #ff00ff;">Halogen</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-pink-900/40 border-pink-500" data-category="noble" style="color: #ff88ff;">Noble Gas</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-indigo-900/40 border-indigo-500" data-category="lanthanide" style="color: #aa00ff;">Lanthanide</button>
+                    <button class="category-btn mobile-cat px-3 py-3 rounded text-xs font-bold bg-teal-900/40 border-teal-500" data-category="actinide" style="color: #00ffaa;">Actinide</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Element Data with NEON colors
+        const categoryColors = {
+            'alkali': { color: 0xff0040, name: 'Alkali Metal', hex: '#ff0040' },
+            'alkaline': { color: 0xff8000, name: 'Alkaline Earth', hex: '#ff8000' },
+            'transition': { color: 0xffff00, name: 'Transition Metal', hex: '#ffff00' },
+            'post-transition': { color: 0x00aaff, name: 'Post-Transition', hex: '#00aaff' },
+            'metalloid': { color: 0x00ff00, name: 'Metalloid', hex: '#00ff00' },
+            'nonmetal': { color: 0x00ffff, name: 'Nonmetal', hex: '#00ffff' },
+            'halogen': { color: 0xff00ff, name: 'Halogen', hex: '#ff00ff' },
+            'noble': { color: 0xff88ff, name: 'Noble Gas', hex: '#ff88ff' },
+            'lanthanide': { color: 0xaa00ff, name: 'Lanthanide', hex: '#aa00ff' },
+            'actinide': { color: 0x00ffaa, name: 'Actinide', hex: '#00ffaa' }
+        };
+
+        // All 118 elements data
+        const elements = [
+            {number: 1, symbol: 'H', name: 'Hydrogen', mass: '1.008', category: 'nonmetal', config: '1s¹', electro: '2.20', radius: '53', discovery: '1766 by Henry Cavendish', desc: 'The lightest element, colorless, odorless, tasteless, non-toxic, highly combustible diatomic gas.', uses: ['Rocket fuel', 'Ammonia production', 'Hydrogen fuel cells', 'Welding']},
+            {number: 2, symbol: 'He', name: 'Helium', mass: '4.0026', category: 'noble', config: '1s²', electro: '-', radius: '31', discovery: '1868 by Pierre Janssen', desc: 'Colorless, odorless, tasteless, non-toxic, inert, monatomic gas. Second lightest element.', uses: ['Balloons', 'Cryogenics', 'Helium-neon lasers', 'Breathing mixtures']},
+            {number: 3, symbol: 'Li', name: 'Lithium', mass: '6.94', category: 'alkali', config: '[He] 2s¹', electro: '0.98', radius: '167', discovery: '1817 by Johan August Arfwedson', desc: 'Soft, silvery-white alkali metal. Highly reactive and flammable.', uses: ['Batteries', 'Mood stabilizers', 'Lubricants', 'Glass/ceramics']},
+            {number: 4, symbol: 'Be', name: 'Beryllium', mass: '9.0122', category: 'alkaline', config: '[He] 2s²', electro: '1.57', radius: '112', discovery: '1798 by Louis Nicolas Vauquelin', desc: 'Steel-gray, strong, lightweight and brittle alkaline earth metal.', uses: ['Aerospace', 'X-ray windows', 'Nuclear reactors', 'Precision instruments']},
+            {number: 5, symbol: 'B', name: 'Boron', mass: '10.81', category: 'metalloid', config: '[He] 2s² 2p¹', electro: '2.04', radius: '87', discovery: '1808 by Joseph Louis Gay-Lussac', desc: 'Black-brown metalloid, essential for plant growth.', uses: ['Borosilicate glass', 'Semiconductors', 'Cleaning products', 'Pyrotechnics']},
+            {number: 6, symbol: 'C', name: 'Carbon', mass: '12.011', category: 'nonmetal', config: '[He] 2s² 2p²', electro: '2.55', radius: '67', discovery: 'Ancient times', desc: 'Nonmetallic, tetravalent element. Basis of all known life.', uses: ['Steel production', 'Filters', 'Diamonds', 'Graphite']},
+            {number: 7, symbol: 'N', name: 'Nitrogen', mass: '14.007', category: 'nonmetal', config: '[He] 2s² 2p³', electro: '3.04', radius: '56', discovery: '1772 by Daniel Rutherford', desc: 'Colorless, odorless diatomic gas. Makes up 78% of Earth\'s atmosphere.', uses: ['Fertilizers', 'Cryogenics', 'Electronics', 'Food preservation']},
+            {number: 8, symbol: 'O', name: 'Oxygen', mass: '15.999', category: 'nonmetal', config: '[He] 2s² 2p⁴', electro: '3.44', radius: '48', discovery: '1774 by Joseph Priestley', desc: 'Highly reactive nonmetal, oxidizing agent. Essential for respiration.', uses: ['Medical', 'Steel production', 'Rocket propulsion', 'Water treatment']},
+            {number: 9, symbol: 'F', name: 'Fluorine', mass: '18.998', category: 'halogen', config: '[He] 2s² 2p⁵', electro: '3.98', radius: '42', discovery: '1886 by Henri Moissan', desc: 'Pale yellow diatomic gas, most electronegative element.', uses: ['Toothpaste', 'Teflon', 'Refrigerants', 'Uranium enrichment']},
+            {number: 10, symbol: 'Ne', name: 'Neon', mass: '20.180', category: 'noble', config: '[He] 2s² 2p⁶', electro: '-', radius: '38', discovery: '1898 by William Ramsay', desc: 'Colorless, odorless, inert monatomic gas. Gives red-orange glow in vacuum discharge.', uses: ['Neon signs', 'Cryogenics', 'High-voltage indicators', 'Television tubes']},
+            {number: 11, symbol: 'Na', name: 'Sodium', mass: '22.990', category: 'alkali', config: '[Ne] 3s¹', electro: '0.93', radius: '190', discovery: '1807 by Humphry Davy', desc: 'Soft, silvery-white, highly reactive alkali metal.', uses: ['Table salt', 'Street lights', 'Soap', 'Nuclear reactors']},
+            {number: 12, symbol: 'Mg', name: 'Magnesium', mass: '24.305', category: 'alkaline', config: '[Ne] 3s²', electro: '1.31', radius: '145', discovery: '1808 by Humphry Davy', desc: 'Shiny gray solid, abundant element in Earth.', uses: ['Alloys', 'Fireworks', 'Medicine', 'Flash photography']},
+            {number: 13, symbol: 'Al', name: 'Aluminum', mass: '26.982', category: 'post-transition', config: '[Ne] 3s² 3p¹', electro: '1.61', radius: '118', discovery: '1825 by Hans Christian Ørsted', desc: 'Silvery-white, soft, non-magnetic, ductile metal.', uses: ['Aerospace', 'Packaging', 'Construction', 'Electrical']},
+            {number: 14, symbol: 'Si', name: 'Silicon', mass: '28.085', category: 'metalloid', config: '[Ne] 3s² 3p²', electro: '1.90', radius: '111', discovery: '1824 by Jöns Jacob Berzelius', desc: 'Hard, brittle crystalline solid with blue-gray metallic luster.', uses: ['Semiconductors', 'Solar cells', 'Glass', 'Concrete']},
+            {number: 15, symbol: 'P', name: 'Phosphorus', mass: '30.974', category: 'nonmetal', config: '[Ne] 3s² 3p³', electro: '2.19', radius: '98', discovery: '1669 by Hennig Brand', desc: 'Multivalent nonmetal, essential for life.', uses: ['Fertilizers', 'Matches', 'Steel production', 'Detergents']},
+            {number: 16, symbol: 'S', name: 'Sulfur', mass: '32.06', category: 'nonmetal', config: '[Ne] 3s² 3p⁴', electro: '2.58', radius: '88', discovery: 'Ancient times', desc: 'Bright yellow solid at room temperature.', uses: ['Fertilizers', 'Gunpowder', 'Matches', 'Rubber vulcanization']},
+            {number: 17, symbol: 'Cl', name: 'Chlorine', mass: '35.45', category: 'halogen', config: '[Ne] 3s² 3p⁵', electro: '3.16', radius: '79', discovery: '1774 by Carl Wilhelm Scheele', desc: 'Yellow-green gas, second-lightest halogen.', uses: ['Water treatment', 'PVC', 'Disinfectants', 'Paper production']},
+            {number: 18, symbol: 'Ar', name: 'Argon', mass: '39.948', category: 'noble', config: '[Ne] 3s² 3p⁶', electro: '-', radius: '71', discovery: '1894 by Lord Rayleigh', desc: 'Third-most abundant gas in Earth\'s atmosphere.', uses: ['Welding', 'Light bulbs', 'Cryogenics', 'Wine preservation']},
+            {number: 19, symbol: 'K', name: 'Potassium', mass: '39.098', category: 'alkali', config: '[Ar] 4s¹', electro: '0.82', radius: '243', discovery: '1807 by Humphry Davy', desc: 'Soft, silvery-white alkali metal, oxidizes rapidly in air.', uses: ['Fertilizers', 'Soap', 'Glass', 'Food additive']},
+            {number: 20, symbol: 'Ca', name: 'Calcium', mass: '40.078', category: 'alkaline', config: '[Ar] 4s²', electro: '1.00', radius: '194', discovery: '1808 by Humphry Davy', desc: 'Soft gray alkaline earth metal, fifth-most abundant in Earth crust.', uses: ['Cement', 'Cheese', 'Steel', 'Bones']},
+            {number: 21, symbol: 'Sc', name: 'Scandium', mass: '44.956', category: 'transition', config: '[Ar] 3d¹ 4s²', electro: '1.36', radius: '184', discovery: '1879 by Lars Fredrik Nilson', desc: 'Silvery-white metallic d-block element.', uses: ['Aerospace', 'Lamps', 'Electronics', 'Sports equipment']},
+            {number: 22, symbol: 'Ti', name: 'Titanium', mass: '47.867', category: 'transition', config: '[Ar] 3d² 4s²', electro: '1.54', radius: '176', discovery: '1791 by William Gregor', desc: 'Lustrous transition metal with silver color, low density, high strength.', uses: ['Aerospace', 'Medical implants', 'Jewelry', 'Pigments']},
+            {number: 23, symbol: 'V', name: 'Vanadium', mass: '50.942', category: 'transition', config: '[Ar] 3d³ 4s²', electro: '1.63', radius: '171', discovery: '1801 by Andrés Manuel del Río', desc: 'Hard, silvery-grey, ductile, malleable transition metal.', uses: ['Steel alloys', 'Batteries', 'Catalysts', 'Pigments']},
+            {number: 24, symbol: 'Cr', name: 'Chromium', mass: '51.996', category: 'transition', config: '[Ar] 3d⁵ 4s¹', electro: '1.66', radius: '166', discovery: '1797 by Louis Nicolas Vauquelin', desc: 'Steely-grey, lustrous, hard and brittle metal.', uses: ['Stainless steel', 'Chrome plating', 'Pigments', 'Wood preservation']},
+            {number: 25, symbol: 'Mn', name: 'Manganese', mass: '54.938', category: 'transition', config: '[Ar] 3d⁵ 4s²', electro: '1.55', radius: '161', discovery: '1774 by Carl Wilhelm Scheele', desc: 'Silvery-gray metal resembling iron.', uses: ['Steel production', 'Batteries', 'Pigments', 'Fertilizers']},
+            {number: 26, symbol: 'Fe', name: 'Iron', mass: '55.845', category: 'transition', config: '[Ar] 3d⁶ 4s²', electro: '1.83', radius: '156', discovery: 'Ancient times', desc: 'Metal in first transition series, most common element on Earth by mass.', uses: ['Steel', 'Construction', 'Magnets', 'Blood']},
+            {number: 27, symbol: 'Co', name: 'Cobalt', mass: '58.933', category: 'transition', config: '[Ar] 3d⁷ 4s²', electro: '1.88', radius: '152', discovery: '1735 by Georg Brandt', desc: 'Hard, lustrous, silver-gray metal.', uses: ['Magnets', 'Batteries', 'Pigments', 'Catalysts']},
+            {number: 28, symbol: 'Ni', name: 'Nickel', mass: '58.693', category: 'transition', config: '[Ar] 3d⁸ 4s²', electro: '1.91', radius: '149', discovery: '1751 by Axel Fredrik Cronstedt', desc: 'Silvery-white lustrous metal with slight golden tinge.', uses: ['Stainless steel', 'Batteries', 'Plating', 'Coins']},
+            {number: 29, symbol: 'Cu', name: 'Copper', mass: '63.546', category: 'transition', config: '[Ar] 3d¹⁰ 4s¹', electro: '1.90', radius: '145', discovery: 'Ancient times', desc: 'Soft, malleable, ductile metal with high thermal and electrical conductivity.', uses: ['Wiring', 'Plumbing', 'Coins', 'Electronics']},
+            {number: 30, symbol: 'Zn', name: 'Zinc', mass: '65.38', category: 'transition', config: '[Ar] 3d¹⁰ 4s²', electro: '1.65', radius: '142', discovery: 'Ancient times', desc: 'Bluish-white, lustrous, diamagnetic metal.', uses: ['Galvanization', 'Batteries', 'Alloys', 'Sunscreen']},
+            {number: 31, symbol: 'Ga', name: 'Gallium', mass: '69.723', category: 'post-transition', config: '[Ar] 3d¹⁰ 4s² 4p¹', electro: '1.81', radius: '136', discovery: '1875 by Paul-Émile Lecoq de Boisbaudran', desc: 'Soft, silvery blue metal, brittle at low temperatures.', uses: ['Electronics', 'LEDs', 'Solar panels', 'Thermometers']},
+            {number: 32, symbol: 'Ge', name: 'Germanium', mass: '72.63', category: 'metalloid', config: '[Ar] 3d¹⁰ 4s² 4p²', electro: '2.01', radius: '125', discovery: '1886 by Clemens Winkler', desc: 'Lustrous, hard, grayish-white metalloid in carbon group.', uses: ['Fiber optics', 'Infrared optics', 'Electronics', 'Solar cells']},
+            {number: 33, symbol: 'As', name: 'Arsenic', mass: '74.922', category: 'metalloid', config: '[Ar] 3d¹⁰ 4s² 4p³', electro: '2.18', radius: '114', discovery: 'Ancient times', desc: 'Metalloid, gray, brittle, crystalline solid.', uses: ['Pesticides', 'Alloys', 'Electronics', 'Medicine']},
+            {number: 34, symbol: 'Se', name: 'Selenium', mass: '78.96', category: 'nonmetal', config: '[Ar] 3d¹⁰ 4s² 4p⁴', electro: '2.55', radius: '103', discovery: '1817 by Jöns Jacob Berzelius', desc: 'Nonmetal with properties intermediate between sulfur and tellurium.', uses: ['Photocopiers', 'Glass', 'Pigments', 'Shampoos']},
+            {number: 35, symbol: 'Br', name: 'Bromine', mass: '79.904', category: 'halogen', config: '[Ar] 3d¹⁰ 4s² 4p⁵', electro: '2.96', radius: '94', discovery: '1825 by Carl Jacob Löwig', desc: 'Fuming red-brown liquid at room temperature.', uses: ['Flame retardants', 'Water treatment', 'Pharmaceuticals', 'Photography']},
+            {number: 36, symbol: 'Kr', name: 'Krypton', mass: '83.798', category: 'noble', config: '[Ar] 3d¹⁰ 4s² 4p⁶', electro: '3.00', radius: '88', discovery: '1898 by William Ramsay', desc: 'Colorless, odorless, tasteless noble gas.', uses: ['Lighting', 'Photography', 'Lasers', 'Insulation']},
+            {number: 37, symbol: 'Rb', name: 'Rubidium', mass: '85.468', category: 'alkali', config: '[Kr] 5s¹', electro: '0.82', radius: '265', discovery: '1861 by Robert Bunsen', desc: 'Soft, silvery-white metallic element.', uses: ['Specialty glasses', 'Vacuum tubes', 'Atomic clocks', 'Research']},
+            {number: 38, symbol: 'Sr', name: 'Strontium', mass: '87.62', category: 'alkaline', config: '[Kr] 5s²', electro: '0.95', radius: '219', discovery: '1790 by Adair Crawford', desc: 'Soft silver-white yellowish metallic element.', uses: ['Fireworks', 'Magnets', 'Paint', 'Medical imaging']},
+            {number: 39, symbol: 'Y', name: 'Yttrium', mass: '88.906', category: 'transition', config: '[Kr] 4d¹ 5s²', electro: '1.22', radius: '212', discovery: '1794 by Johan Gadolin', desc: 'Silvery-metallic transition metal.', uses: ['LEDs', 'Superconductors', 'Cancer treatment', 'Camera lenses']},
+            {number: 40, symbol: 'Zr', name: 'Zirconium', mass: '91.224', category: 'transition', config: '[Kr] 4d² 5s²', electro: '1.33', radius: '206', discovery: '1789 by Martin Heinrich Klaproth', desc: 'Lustrous, grey-white, strong transition metal.', uses: ['Nuclear reactors', 'Chemical processing', 'Jewelry', 'Surgical instruments']},
+            {number: 41, symbol: 'Nb', name: 'Niobium', mass: '92.906', category: 'transition', config: '[Kr] 4d⁴ 5s¹', electro: '1.6', radius: '198', discovery: '1801 by Charles Hatchett', desc: 'Soft, grey, ductile transition metal.', uses: ['Steel alloys', 'Superconductors', 'Jewelry', 'Medical devices']},
+            {number: 42, symbol: 'Mo', name: 'Molybdenum', mass: '95.95', category: 'transition', config: '[Kr] 4d⁵ 5s¹', electro: '2.16', radius: '190', discovery: '1778 by Carl Wilhelm Scheele', desc: 'Silvery metal with gray cast.', uses: ['Steel alloys', 'Catalysts', 'Lubricants', 'Pigments']},
+            {number: 43, symbol: 'Tc', name: 'Technetium', mass: '98', category: 'transition', config: '[Kr] 4d⁵ 5s²', electro: '1.9', radius: '183', discovery: '1937 by Carlo Perrier', desc: 'Lightest radioactive element, silvery gray.', uses: ['Medical imaging', 'Research', 'Corrosion protection']},
+            {number: 44, symbol: 'Ru', name: 'Ruthenium', mass: '101.07', category: 'transition', config: '[Kr] 4d⁷ 5s¹', electro: '2.2', radius: '178', discovery: '1844 by Karl Ernst Claus', desc: 'Rare transition metal belonging to platinum group.', uses: ['Electronics', 'Catalysts', 'Solar cells', 'Jewelry']},
+            {number: 45, symbol: 'Rh', name: 'Rhodium', mass: '102.91', category: 'transition', config: '[Kr] 4d⁸ 5s¹', electro: '2.28', radius: '173', discovery: '1803 by William Hyde Wollaston', desc: 'Rare, silvery-white, hard, corrosion-resistant metal.', uses: ['Catalysts', 'Jewelry', 'Electronics', 'Headlight reflectors']},
+            {number: 46, symbol: 'Pd', name: 'Palladium', mass: '106.42', category: 'transition', config: '[Kr] 4d¹⁰', electro: '2.20', radius: '169', discovery: '1803 by William Hyde Wollaston', desc: 'Soft, silvery-white metal that resembles platinum.', uses: ['Catalytic converters', 'Electronics', 'Dentistry', 'Jewelry']},
+            {number: 47, symbol: 'Ag', name: 'Silver', mass: '107.87', category: 'transition', config: '[Kr] 4d¹⁰ 5s¹', electro: '1.93', radius: '165', discovery: 'Ancient times', desc: 'Soft, white, lustrous transition metal with highest electrical conductivity.', uses: ['Jewelry', 'Electronics', 'Mirrors', 'Medical']},
+            {number: 48, symbol: 'Cd', name: 'Cadmium', mass: '112.41', category: 'transition', config: '[Kr] 4d¹⁰ 5s²', electro: '1.69', radius: '161', discovery: '1817 by Friedrich Stromeyer', desc: 'Soft, bluish-white metal, chemically similar to zinc and mercury.', uses: ['Batteries', 'Pigments', 'Coatings', 'Nuclear control rods']},
+            {number: 49, symbol: 'In', name: 'Indium', mass: '114.82', category: 'post-transition', config: '[Kr] 4d¹⁰ 5s² 5p¹', electro: '1.78', radius: '156', discovery: '1863 by Ferdinand Reich', desc: 'Soft, malleable, post-transition metal.', uses: ['Touch screens', 'Solar panels', 'LEDs', 'Alloys']},
+            {number: 50, symbol: 'Sn', name: 'Tin', mass: '118.71', category: 'post-transition', config: '[Kr] 4d¹⁰ 5s² 5p²', electro: '1.96', radius: '145', discovery: 'Ancient times', desc: 'Soft, silvery-white metal, post-transition in group 14.', uses: ['Solder', 'Tin plating', 'Bronze', 'Food packaging']},
+            {number: 51, symbol: 'Sb', name: 'Antimony', mass: '121.76', category: 'metalloid', config: '[Kr] 4d¹⁰ 5s² 5p³', electro: '2.05', radius: '133', discovery: 'Ancient times', desc: 'Lustrous gray metalloid.', uses: ['Flame retardants', 'Batteries', 'Alloys', 'Semiconductors']},
+            {number: 52, symbol: 'Te', name: 'Tellurium', mass: '127.60', category: 'metalloid', config: '[Kr] 4d¹⁰ 5s² 5p⁴', electro: '2.1', radius: '123', discovery: '1782 by Franz-Joseph Müller von Reichenstein', desc: 'Brittle, mildly toxic, rare, silver-white metalloid.', uses: ['Solar panels', 'Alloys', 'Thermoelectric devices', 'Rubber']},
+            {number: 53, symbol: 'I', name: 'Iodine', mass: '126.90', category: 'halogen', config: '[Kr] 4d¹⁰ 5s² 5p⁵', electro: '2.66', radius: '115', discovery: '1811 by Bernard Courtois', desc: 'Shiny gray-black solid, sublimes into violet gas.', uses: ['Nutrition', 'Medical disinfectants', 'Photography', 'Catalysts']},
+            {number: 54, symbol: 'Xe', name: 'Xenon', mass: '131.29', category: 'noble', config: '[Kr] 4d¹⁰ 5s² 5p⁶', electro: '2.6', radius: '108', discovery: '1898 by William Ramsay', desc: 'Colorless, dense, odorless noble gas.', uses: ['Lighting', 'Anesthesia', 'Space propulsion', 'Medical imaging']},
+            {number: 55, symbol: 'Cs', name: 'Cesium', mass: '132.91', category: 'alkali', config: '[Xe] 6s¹', electro: '0.79', radius: '298', discovery: '1860 by Robert Bunsen', desc: 'Soft, gold-colored alkali metal.', uses: ['Atomic clocks', 'Photoelectric cells', 'Drilling fluids', 'Research']},
+            {number: 56, symbol: 'Ba', name: 'Barium', mass: '137.33', category: 'alkaline', config: '[Xe] 6s²', electro: '0.89', radius: '253', discovery: '1808 by Humphry Davy', desc: 'Soft, silvery alkaline earth metal.', uses: ['Medical imaging', 'Paint', 'Glassmaking', 'Fireworks']},
+            {number: 57, symbol: 'La', name: 'Lanthanum', mass: '138.91', category: 'lanthanide', config: '[Xe] 5d¹ 6s²', electro: '1.10', radius: '226', discovery: '1839 by Carl Gustaf Mosander', desc: 'Soft, ductile, silvery-white lanthanide.', uses: ['Camera lenses', 'Batteries', 'Catalysts', 'Lighting']},
+            {number: 58, symbol: 'Ce', name: 'Cerium', mass: '140.12', category: 'lanthanide', config: '[Xe] 4f¹ 5d¹ 6s²', electro: '1.12', radius: '225', discovery: '1803 by Martin Heinrich Klaproth', desc: 'Soft, silvery, ductile metal, most abundant lanthanide.', uses: ['Catalysts', 'Glass polishing', 'Lighters', 'Alloys']},
+            {number: 59, symbol: 'Pr', name: 'Praseodymium', mass: '140.91', category: 'lanthanide', config: '[Xe] 4f³ 6s²', electro: '1.13', radius: '247', discovery: '1885 by Carl Auer von Welsbach', desc: 'Soft, silvery, malleable and ductile metal.', uses: ['Magnets', 'Glass colorant', 'Alloys', 'Catalysts']},
+            {number: 60, symbol: 'Nd', name: 'Neodymium', mass: '144.24', category: 'lanthanide', config: '[Xe] 4f⁴ 6s²', electro: '1.14', radius: '206', discovery: '1885 by Carl Auer von Welsbach', desc: 'Soft silvery metal, tarnishes in air.', uses: ['Strong magnets', 'Lasers', 'Glass colorant', 'Catalysts']},
+            {number: 61, symbol: 'Pm', name: 'Promethium', mass: '145', category: 'lanthanide', config: '[Xe] 4f⁵ 6s²', electro: '1.13', radius: '205', discovery: '1945 by Jacob A. Marinsky', desc: 'Radioactive, only lanthanide with no stable isotopes.', uses: ['Nuclear batteries', 'Luminous paint', 'Research', 'Medical']},
+            {number: 62, symbol: 'Sm', name: 'Samarium', mass: '150.36', category: 'lanthanide', config: '[Xe] 4f⁶ 6s²', electro: '1.17', radius: '238', discovery: '1879 by Lecoq de Boisbaudran', desc: 'Hard, silvery metal, fairly stable in air.', uses: ['Magnets', 'Cancer treatment', 'Nuclear reactors', 'Catalysts']},
+            {number: 63, symbol: 'Eu', name: 'Europium', mass: '151.96', category: 'lanthanide', config: '[Xe] 4f⁷ 6s²', electro: '1.2', radius: '231', discovery: '1896 by Eugène-Anatole Demarçay', desc: 'Most reactive lanthanide, soft, silvery-white.', uses: ['Phosphors', 'Euro banknotes', 'Nuclear control rods', 'Mercury lamps']},
+            {number: 64, symbol: 'Gd', name: 'Gadolinium', mass: '157.25', category: 'lanthanide', config: '[Xe] 4f⁷ 5d¹ 6s²', electro: '1.20', radius: '233', discovery: '1880 by Jean Charles Galissard de Marignac', desc: 'Silvery-white, malleable and ductile rare earth metal.', uses: ['MRI contrast', 'Magnets', 'Refrigeration', 'Nuclear reactors']},
+            {number: 65, symbol: 'Tb', name: 'Terbium', mass: '158.93', category: 'lanthanide', config: '[Xe] 4f⁹ 6s²', electro: '1.2', radius: '225', discovery: '1843 by Carl Gustaf Mosander', desc: 'Silvery-white, rare earth metal, malleable and ductile.', uses: ['Green phosphors', 'Magnets', 'Fuel cells', 'Sonar']},
+            {number: 66, symbol: 'Dy', name: 'Dysprosium', mass: '162.50', category: 'lanthanide', config: '[Xe] 4f¹⁰ 6s²', electro: '1.22', radius: '228', discovery: '1886 by Lecoq de Boisbaudran', desc: 'Rare earth element with metallic silver luster.', uses: ['Magnets', 'Nuclear reactors', 'Lighting', 'Data storage']},
+            {number: 67, symbol: 'Ho', name: 'Holmium', mass: '164.93', category: 'lanthanide', config: '[Xe] 4f¹¹ 6s²', electro: '1.23', radius: '226', discovery: '1878 by Per Teodor Cleve', desc: 'Relatively soft, malleable, silvery-white metal.', uses: ['Magnets', 'Lasers', 'Nuclear control rods', 'Medical']},
+            {number: 68, symbol: 'Er', name: 'Erbium', mass: '167.26', category: 'lanthanide', config: '[Xe] 4f¹² 6s²', electro: '1.24', radius: '226', discovery: '1843 by Carl Gustaf Mosander', desc: 'Silvery-white solid metal, soft and malleable.', uses: ['Fiber optics', 'Lasers', 'Nuclear control rods', 'Colorant']},
+            {number: 69, symbol: 'Tm', name: 'Thulium', mass: '168.93', category: 'lanthanide', config: '[Xe] 4f¹³ 6s²', electro: '1.25', radius: '222', discovery: '1879 by Per Teodor Cleve', desc: 'Second-least abundant lanthanide, silvery-gray.', uses: ['Lasers', 'Medical', 'Portable X-rays', 'Research']},
+            {number: 70, symbol: 'Yb', name: 'Ytterbium', mass: '173.05', category: 'lanthanide', config: '[Xe] 4f¹⁴ 6s²', electro: '1.1', radius: '222', discovery: '1878 by Jean Charles Galissard de Marignac', desc: 'Soft, malleable, ductile silvery metal.', uses: ['Atomic clocks', 'Lasers', 'Steel additive', 'Medical']},
+            {number: 71, symbol: 'Lu', name: 'Lutetium', mass: '174.97', category: 'lanthanide', config: '[Xe] 4f¹⁴ 5d¹ 6s²', electro: '1.27', radius: '217', discovery: '1907 by Georges Urbain', desc: 'Silvery-white, hard, dense, rare earth metal.', uses: ['Catalysts', 'PET scans', 'LEDs', 'Research']},
+            {number: 72, symbol: 'Hf', name: 'Hafnium', mass: '178.49', category: 'transition', config: '[Xe] 4f¹⁴ 5d² 6s²', electro: '1.3', radius: '208', discovery: '1923 by Dirk Coster', desc: 'Lustrous, silvery gray, tetravalent transition metal.', uses: ['Nuclear reactors', 'Plasma cutting', 'Microprocessors', 'Filaments']},
+            {number: 73, symbol: 'Ta', name: 'Tantalum', mass: '180.95', category: 'transition', config: '[Xe] 4f¹⁴ 5d³ 6s²', electro: '1.5', radius: '200', discovery: '1802 by Anders Gustaf Ekeberg', desc: 'Rare, hard, blue-gray, lustrous transition metal.', uses: ['Electronics', 'Surgical implants', 'Chemical processing', 'Capacitors']},
+            {number: 74, symbol: 'W', name: 'Tungsten', mass: '183.84', category: 'transition', config: '[Xe] 4f¹⁴ 5d⁴ 6s²', electro: '2.36', radius: '193', discovery: '1783 by Juan José Elhuyar', desc: 'Rare metal, naturally found on Earth almost exclusively in compounds.', uses: ['Light bulbs', 'Cutting tools', 'Alloys', 'Radiation shielding']},
+            {number: 75, symbol: 'Re', name: 'Rhenium', mass: '186.21', category: 'transition', config: '[Xe] 4f¹⁴ 5d⁵ 6s²', electro: '1.9', radius: '188', discovery: '1925 by Walter Noddack', desc: 'Silvery-gray metal, one of the rarest elements in Earth crust.', uses: ['Jet engines', 'Catalysts', 'Filaments', 'Electronics']},
+            {number: 76, symbol: 'Os', name: 'Osmium', mass: '190.23', category: 'transition', config: '[Xe] 4f¹⁴ 5d⁶ 6s²', electro: '2.2', radius: '185', discovery: '1803 by Smithson Tennant', desc: 'Hard, brittle, bluish-white transition metal in platinum group.', uses: ['Fountain pen tips', 'Electrical contacts', 'Alloys', 'Catalysts']},
+            {number: 77, symbol: 'Ir', name: 'Iridium', mass: '192.22', category: 'transition', config: '[Xe] 4f¹⁴ 5d⁷ 6s²', electro: '2.20', radius: '180', discovery: '1803 by Smithson Tennant', desc: 'Very hard, brittle, silvery-white transition metal of platinum family.', uses: ['Spark plugs', 'Electronics', 'Medical', 'Aerospace']},
+            {number: 78, symbol: 'Pt', name: 'Platinum', mass: '195.08', category: 'transition', config: '[Xe] 4f¹⁴ 5d⁹ 6s¹', electro: '2.28', radius: '177', discovery: 'Ancient times', desc: 'Dense, malleable, ductile, highly unreactive, precious, silver-white transition metal.', uses: ['Catalytic converters', 'Jewelry', 'Electronics', 'Medical devices']},
+            {number: 79, symbol: 'Au', name: 'Gold', mass: '196.97', category: 'transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s¹', electro: '2.54', radius: '174', discovery: 'Ancient times', desc: 'Bright, slightly reddish yellow, dense, soft, malleable, ductile metal.', uses: ['Currency', 'Jewelry', 'Electronics', 'Dentistry']},
+            {number: 80, symbol: 'Hg', name: 'Mercury', mass: '200.59', category: 'transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s²', electro: '2.00', radius: '171', discovery: 'Ancient times', desc: 'Only metallic element that is liquid at standard conditions.', uses: ['Thermometers', 'Dental amalgams', 'Fluorescent lamps', 'Batteries']},
+            {number: 81, symbol: 'Tl', name: 'Thallium', mass: '204.38', category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p¹', electro: '1.62', radius: '156', discovery: '1861 by William Crookes', desc: 'Soft, gray post-transition metal, not found free in nature.', uses: ['Electronics', 'Glass', 'Medical', 'Research']},
+            {number: 82, symbol: 'Pb', name: 'Lead', mass: '207.2', category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p²', electro: '2.33', radius: '154', discovery: 'Ancient times', desc: 'Heavy metal that is denser than most common materials, soft and malleable.', uses: ['Batteries', 'Radiation shielding', 'Ammunition', 'Construction']},
+            {number: 83, symbol: 'Bi', name: 'Bismuth', mass: '208.98', category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p³', electro: '2.02', radius: '143', discovery: 'Ancient times', desc: 'Brittle, crystalline, white metal with pink tinge.', uses: ['Medicine', 'Cosmetics', 'Alloys', 'Fire detection']},
+            {number: 84, symbol: 'Po', name: 'Polonium', mass: '209', category: 'post-transition', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁴', electro: '2.0', radius: '135', discovery: '1898 by Marie Curie', desc: 'Rare and highly radioactive metal, no stable isotopes.', uses: ['Research', 'Static eliminators', 'Space probes', 'Nuclear batteries']},
+            {number: 85, symbol: 'At', name: 'Astatine', mass: '210', category: 'halogen', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁵', electro: '2.2', radius: '127', discovery: '1940 by Dale R. Corson', desc: 'Radioactive chemical element, rarest naturally occurring element.', uses: ['Research', 'Cancer treatment', 'Targeted alpha therapy']},
+            {number: 86, symbol: 'Rn', name: 'Radon', mass: '222', category: 'noble', config: '[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁶', electro: '2.2', radius: '120', discovery: '1899 by Friedrich Ernst Dorn', desc: 'Radioactive, colorless, odorless, tasteless noble gas.', uses: ['Cancer treatment', 'Research', 'Earthquake prediction']},
+            {number: 87, symbol: 'Fr', name: 'Francium', mass: '223', category: 'alkali', config: '[Rn] 7s¹', electro: '0.7', radius: '348', discovery: '1939 by Marguerite Perey', desc: 'Highly radioactive metal, second-rarest naturally occurring element.', uses: ['Research only']},
+            {number: 88, symbol: 'Ra', name: 'Radium', mass: '226', category: 'alkaline', config: '[Rn] 7s²', electro: '0.9', radius: '283', discovery: '1898 by Marie Curie', desc: 'Radioactive, alkaline earth metal, silvery-white metal.', uses: ['Cancer treatment', 'Luminous paint', 'Research']},
+            {number: 89, symbol: 'Ac', name: 'Actinium', mass: '227', category: 'actinide', config: '[Rn] 6d¹ 7s²', electro: '1.1', radius: '260', discovery: '1899 by Friedrich O. Giesel', desc: 'Soft, silvery-white radioactive metal, glows blue in dark.', uses: ['Cancer treatment', 'Neutron production', 'Research']},
+            {number: 90, symbol: 'Th', name: 'Thorium', mass: '232.04', category: 'actinide', config: '[Rn] 6d² 7s²', electro: '1.3', radius: '237', discovery: '1828 by Jöns Jacob Berzelius', desc: 'Weakly radioactive, silvery metal, fertile material for nuclear fuel.', uses: ['Nuclear fuel', 'Gas mantles', 'Alloys', 'Camera lenses']},
+            {number: 91, symbol: 'Pa', name: 'Protactinium', mass: '231.04', category: 'actinide', config: '[Rn] 5f² 6d¹ 7s²', electro: '1.5', radius: '243', discovery: '1913 by Kasimir Fajans', desc: 'Dense, silvery-gray actinide metal, highly radioactive.', uses: ['Research', 'Dating sediments', 'Nuclear studies']},
+            {number: 92, symbol: 'U', name: 'Uranium', mass: '238.03', category: 'actinide', config: '[Rn] 5f³ 6d¹ 7s²', electro: '1.38', radius: '240', discovery: '1789 by Martin Heinrich Klaproth', desc: 'Silvery-white metal in actinide series, weakly radioactive.', uses: ['Nuclear fuel', 'Weapons', 'Radiation shielding', 'Dating rocks']},
+            {number: 93, symbol: 'Np', name: 'Neptunium', mass: '237', category: 'actinide', config: '[Rn] 5f⁴ 6d¹ 7s²', electro: '1.36', radius: '221', discovery: '1940 by Edwin McMillan', desc: 'First transuranic element, radioactive, silvery metal.', uses: ['Research', 'Neutron detection', 'Nuclear batteries']},
+            {number: 94, symbol: 'Pu', name: 'Plutonium', mass: '244', category: 'actinide', config: '[Rn] 5f⁶ 7s²', electro: '1.28', radius: '243', discovery: '1940 by Glenn T. Seaborg', desc: 'Radioactive actinide metal, silvery-gray, tarnishes in air.', uses: ['Nuclear weapons', 'Nuclear fuel', 'Space probes', 'Pacemaker batteries']},
+            {number: 95, symbol: 'Am', name: 'Americium', mass: '243', category: 'actinide', config: '[Rn] 5f⁷ 7s²', electro: '1.13', radius: '244', discovery: '1944 by Glenn T. Seaborg', desc: 'Synthetic radioactive chemical element, silvery-white metal.', uses: ['Smoke detectors', 'Medical', 'Industrial gauges', 'Research']},
+            {number: 96, symbol: 'Cm', name: 'Curium', mass: '247', category: 'actinide', config: '[Rn] 5f⁷ 6d¹ 7s²', electro: '1.28', radius: '245', discovery: '1944 by Glenn T. Seaborg', desc: 'Hard, dense, silvery metal, radioactive.', uses: ['Research', 'Space probes', 'Medical', 'Alpha particle sources']},
+            {number: 97, symbol: 'Bk', name: 'Berkelium', mass: '247', category: 'actinide', config: '[Rn] 5f⁹ 7s²', electro: '1.3', radius: '244', discovery: '1949 by Glenn T. Seaborg', desc: 'Soft, silvery-white, radioactive actinide metal.', uses: ['Research only', 'Discovery of heavier elements']},
+            {number: 98, symbol: 'Cf', name: 'Californium', mass: '251', category: 'actinide', config: '[Rn] 5f¹⁰ 7s²', electro: '1.3', radius: '245', discovery: '1950 by Glenn T. Seaborg', desc: 'Radioactive metal, silvery-white, very high neutron emission.', uses: ['Neutron sources', 'Oil well logging', 'Medical', 'Research']},
+            {number: 99, symbol: 'Es', name: 'Einsteinium', mass: '252', category: 'actinide', config: '[Rn] 5f¹¹ 7s²', electro: '1.3', radius: '245', discovery: '1952 by Albert Ghiorso', desc: 'Synthetic element, soft, silvery-white, radioactive.', uses: ['Research only']},
+            {number: 100, symbol: 'Fm', name: 'Fermium', mass: '257', category: 'actinide', config: '[Rn] 5f¹² 7s²', electro: '1.3', radius: '245', discovery: '1952 by Albert Ghiorso', desc: 'Synthetic element, highly radioactive, no stable isotopes.', uses: ['Research only']},
+            {number: 101, symbol: 'Md', name: 'Mendelevium', mass: '258', category: 'actinide', config: '[Rn] 5f¹³ 7s²', electro: '1.3', radius: '246', discovery: '1955 by Albert Ghiorso', desc: 'Synthetic element, radioactive metal, first element made one atom at a time.', uses: ['Research only']},
+            {number: 102, symbol: 'No', name: 'Nobelium', mass: '259', category: 'actinide', config: '[Rn] 5f¹⁴ 7s²', electro: '1.3', radius: '246', discovery: '1958 by Albert Ghiorso', desc: 'Synthetic element, radioactive, named after Alfred Nobel.', uses: ['Research only']},
+            {number: 103, symbol: 'Lr', name: 'Lawrencium', mass: '262', category: 'actinide', config: '[Rn] 5f¹⁴ 7s² 7p¹', electro: '1.3', radius: '246', discovery: '1961 by Albert Ghiorso', desc: 'Synthetic element, radioactive, last element of actinide series.', uses: ['Research only']},
+            {number: 104, symbol: 'Rf', name: 'Rutherfordium', mass: '267', category: 'transition', config: '[Rn] 5f¹⁴ 6d² 7s²', electro: '-', radius: '157', discovery: '1964 by Georgy Flerov', desc: 'Synthetic element, highly radioactive, first transactinide.', uses: ['Research only']},
+            {number: 105, symbol: 'Db', name: 'Dubnium', mass: '268', category: 'transition', config: '[Rn] 5f¹⁴ 6d³ 7s²', electro: '-', radius: '149', discovery: '1967 by Georgy Flerov', desc: 'Synthetic element, radioactive, named after Dubna, Russia.', uses: ['Research only']},
+            {number: 106, symbol: 'Sg', name: 'Seaborgium', mass: '269', category: 'transition', config: '[Rn] 5f¹⁴ 6d⁴ 7s²', electro: '-', radius: '143', discovery: '1974 by Albert Ghiorso', desc: 'Synthetic element, radioactive, named after Glenn T. Seaborg.', uses: ['Research only']},
+            {number: 107, symbol: 'Bh', name: 'Bohrium', mass: '270', category: 'transition', config: '[Rn] 5f¹⁴ 6d⁵ 7s²', electro: '-', radius: '141', discovery: '1981 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after Niels Bohr.', uses: ['Research only']},
+            {number: 108, symbol: 'Hs', name: 'Hassium', mass: '269', category: 'transition', config: '[Rn] 5f¹⁴ 6d⁶ 7s²', electro: '-', radius: '134', discovery: '1984 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after German state Hesse.', uses: ['Research only']},
+            {number: 109, symbol: 'Mt', name: 'Meitnerium', mass: '278', category: 'transition', config: '[Rn] 5f¹⁴ 6d⁷ 7s²', electro: '-', radius: '129', discovery: '1982 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after Lise Meitner.', uses: ['Research only']},
+            {number: 110, symbol: 'Ds', name: 'Darmstadtium', mass: '281', category: 'transition', config: '[Rn] 5f¹⁴ 6d⁹ 7s¹', electro: '-', radius: '128', discovery: '1994 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after Darmstadt, Germany.', uses: ['Research only']},
+            {number: 111, symbol: 'Rg', name: 'Roentgenium', mass: '282', category: 'transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s¹', electro: '-', radius: '121', discovery: '1994 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after Wilhelm Röntgen.', uses: ['Research only']},
+            {number: 112, symbol: 'Cn', name: 'Copernicium', mass: '285', category: 'transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s²', electro: '-', radius: '122', discovery: '1996 by Peter Armbruster', desc: 'Synthetic element, radioactive, named after Nicolaus Copernicus.', uses: ['Research only']},
+            {number: 113, symbol: 'Nh', name: 'Nihonium', mass: '286', category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p¹', electro: '-', radius: '136', discovery: '2003 by RIKEN', desc: 'Synthetic element, radioactive, named after Japan (Nihon).', uses: ['Research only']},
+            {number: 114, symbol: 'Fl', name: 'Flerovium', mass: '289', category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p²', electro: '-', radius: '143', discovery: '1998 by Joint Institute', desc: 'Synthetic element, radioactive, named after Flerov Laboratory.', uses: ['Research only']},
+            {number: 115, symbol: 'Mc', name: 'Moscovium', mass: '289', category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p³', electro: '-', radius: '162', discovery: '2003 by Joint Institute', desc: 'Synthetic element, radioactive, named after Moscow.', uses: ['Research only']},
+            {number: 116, symbol: 'Lv', name: 'Livermorium', mass: '293', category: 'post-transition', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁴', electro: '-', radius: '175', discovery: '2000 by Joint Institute', desc: 'Synthetic element, radioactive, named after Lawrence Livermore Lab.', uses: ['Research only']},
+            {number: 117, symbol: 'Ts', name: 'Tennessine', mass: '294', category: 'halogen', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁵', electro: '-', radius: '165', discovery: '2010 by Joint Institute', desc: 'Synthetic element, radioactive, named after Tennessee.', uses: ['Research only']},
+            {number: 118, symbol: 'Og', name: 'Oganesson', mass: '294', category: 'noble', config: '[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁶', electro: '-', radius: '157', discovery: '2002 by Joint Institute', desc: 'Synthetic element, radioactive, named after Yuri Oganessian.', uses: ['Research only']}
+        ];
+
+        // Three.js Setup
+        let scene, camera, renderer;
+        let tableGroup, starField, nebulaField;
+        let objects = [];
+        let targets = { table: [], sphere: [], helix: [], grid: [] };
+        let currentView = 'table';
+        let raycaster, mouse;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let targetCameraZ = 2500;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+
+        // Initialize
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+
+            // Camera with unlimited zoom range
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
+            camera.position.z = 2500;
+
+            // Renderer - Optimized
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true,
+                powerPreference: "high-performance",
+                stencil: false,
+                depth: true
+            });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Lights - Reduced for performance
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Create optimized background
+            createOptimizedStarField();
+            createNebulaEffect();
+
+            // Group for elements
+            tableGroup = new THREE.Group();
+            scene.add(tableGroup);
+
+            // Create elements - Optimized
+            createOptimizedElements();
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Event listeners
+            window.addEventListener('resize', onWindowResize, { passive: true });
+            document.addEventListener('mousemove', onMouseMove, { passive: true });
+            document.addEventListener('click', onClick);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('touchstart', onTouchStart, {passive: false});
+            document.addEventListener('touchmove', onTouchMove, {passive: false});
+            document.addEventListener('touchend', onTouchEnd);
+            document.addEventListener('wheel', onWheel, {passive: false});
+
+            // Start animation with frame skipping for performance
+            requestAnimationFrame(animate);
+            
+            // Transform to table view
+            setTimeout(() => {
+                transform('table');
+                document.getElementById('loadingScreen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loadingScreen').style.display = 'none';
+                }, 500);
+            }, 1000);
+
+            // Update progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 25;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(progressInterval);
+                }
+                document.getElementById('progressFill').style.width = progress + '%';
+            }, 200);
+        }
+
+        function createOptimizedStarField() {
+            // Reduced star count for performance
+            const starCount = 2000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            const sizes = new Float32Array(starCount);
+
+            const colorPalette = [
+                new THREE.Color(0x00ffff),
+                new THREE.Color(0xff00ff),
+                new THREE.Color(0xffff00),
+                new THREE.Color(0xff0040),
+                new THREE.Color(0x00ff00)
+            ];
+
+            for (let i = 0; i < starCount; i++) {
+                const i3 = i * 3;
+                
+                // Spherical distribution
+                const radius = 5000 + Math.random() * 15000;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i3 + 2] = radius * Math.cos(phi);
+
+                // Color from palette
+                const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                colors[i3] = color.r;
+                colors[i3 + 1] = color.g;
+                colors[i3 + 2] = color.b;
+
+                sizes[i] = Math.random() * 3 + 1;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            // Custom shader for better looking stars
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    varying vec3 vColor;
+                    uniform float time;
+                    void main() {
+                        vColor = color;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (300.0 / -mvPosition.z) * (1.0 + sin(time + position.x * 0.01) * 0.3);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    void main() {
+                        float r = distance(gl_PointCoord, vec2(0.5));
+                        if (r > 0.5) discard;
+                        float glow = 1.0 - (r * 2.0);
+                        glow = pow(glow, 2.0);
+                        gl_FragColor = vec4(vColor, glow);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                vertexColors: true
+            });
+
+            starField = new THREE.Points(geometry, material);
+            scene.add(starField);
+        }
+
+        function createNebulaEffect() {
+            // Create nebula clouds using particles
+            const particleCount = 500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const radius = 8000 + Math.random() * 10000;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i3 + 2] = radius * Math.cos(phi);
+
+                // Nebula colors
+                const hue = Math.random() * 0.3 + 0.5; // Blue to purple range
+                const color = new THREE.Color().setHSL(hue, 0.8, 0.5);
+                colors[i3] = color.r;
+                colors[i3 + 1] = color.g;
+                colors[i3 + 2] = color.b;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 200,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.15,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+
+            nebulaField = new THREE.Points(geometry, material);
+            scene.add(nebulaField);
+        }
+
+        function createOptimizedElements() {
+            // Create texture atlas for better performance
+            const textureSize = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = textureSize * 12; // 12 categories
+            canvas.height = textureSize;
+            const ctx = canvas.getContext('2d');
+
+            // Pre-render all category backgrounds
+            const categories = Object.keys(categoryColors);
+            categories.forEach((cat, index) => {
+                const catData = categoryColors[cat];
+                const x = index * textureSize;
+                
+                // Clear with transparent
+                ctx.clearRect(x, 0, textureSize, textureSize);
+                
+                // Draw glow
+                const gradient = ctx.createRadialGradient(
+                    x + textureSize/2, textureSize/2, 10,
+                    x + textureSize/2, textureSize/2, textureSize/2
+                );
+                gradient.addColorStop(0, catData.hex + '40');
+                gradient.addColorStop(0.5, catData.hex + '20');
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, 0, textureSize, textureSize);
+                
+                // Draw border
+                ctx.strokeStyle = catData.hex;
+                ctx.lineWidth = 8;
+                ctx.strokeRect(x + 10, 10, textureSize - 20, textureSize - 20);
+            });
+
+            const textureAtlas = new THREE.CanvasTexture(canvas);
+            textureAtlas.minFilter = THREE.LinearFilter;
+            textureAtlas.magFilter = THREE.LinearFilter;
+
+            // Create geometry once and reuse
+            const geometry = new THREE.PlaneGeometry(100, 140);
+
+            elements.forEach((element, i) => {
+                const catData = categoryColors[element.category];
+                const color = catData.color;
+                
+                const object = new THREE.Object3D();
+                
+                // Create material with proper UV mapping for atlas
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.userData = { element: element, id: i };
+                
+                // Create canvas texture for text
+                const textCanvas = document.createElement('canvas');
+                textCanvas.width = 256;
+                textCanvas.height = 356;
+                const textCtx = textCanvas.getContext('2d');
+                
+                // Background
+                textCtx.fillStyle = 'rgba(20, 20, 40, 0.95)';
+                textCtx.fillRect(0, 0, 256, 356);
+                
+                // Border glow
+                textCtx.shadowColor = catData.hex;
+                textCtx.shadowBlur = 20;
+                textCtx.strokeStyle = catData.hex;
+                textCtx.lineWidth = 6;
+                textCtx.strokeRect(8, 8, 240, 340);
+                textCtx.shadowBlur = 0;
+                
+                // Inner border
+                textCtx.strokeStyle = '#ffffff';
+                textCtx.lineWidth = 2;
+                textCtx.strokeRect(16, 16, 224, 324);
+                
+                // Text
+                textCtx.fillStyle = '#ffffff';
+                textCtx.font = 'bold 36px Arial';
+                textCtx.textAlign = 'left';
+                textCtx.fillText(element.number.toString(), 24, 60);
+                
+                textCtx.fillStyle = catData.hex;
+                textCtx.shadowColor = catData.hex;
+                textCtx.shadowBlur = 15;
+                textCtx.font = 'bold 100px Arial';
+                textCtx.textAlign = 'center';
+                textCtx.fillText(element.symbol, 128, 200);
+                textCtx.shadowBlur = 0;
+                
+                textCtx.fillStyle = '#ffffff';
+                textCtx.font = 'bold 32px Arial';
+                textCtx.fillText(element.name, 128, 260);
+                
+                textCtx.fillStyle = catData.hex;
+                textCtx.font = 'bold 28px Arial';
+                textCtx.fillText(element.mass, 128, 300);
+                
+                const textTexture = new THREE.CanvasTexture(textCanvas);
+                textTexture.minFilter = THREE.LinearFilter;
+                material.map = textTexture;
+                
+                object.add(mesh);
+                
+                // Simplified glow effect
+                const spriteMaterial = new THREE.SpriteMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.3,
+                    blending: THREE.AdditiveBlending
+                });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(200, 200, 1);
+                sprite.position.z = -10;
+                object.add(sprite);
+                
+                tableGroup.add(object);
+                objects.push(object);
+            });
+
+            calculateTablePositions();
+            calculateSpherePositions();
+            calculateHelixPositions();
+            calculateGridPositions();
+        }
+
+        function calculateTablePositions() {
+            const positions = {
+                1: [0, 0], 2: [17, 0],
+                3: [0, 1], 4: [1, 1], 5: [12, 1], 6: [13, 1], 7: [14, 1], 8: [15, 1], 9: [16, 1], 10: [17, 1],
+                11: [0, 2], 12: [1, 2], 13: [12, 2], 14: [13, 2], 15: [14, 2], 16: [15, 2], 17: [16, 2], 18: [17, 2],
+                19: [0, 3], 20: [1, 3], 21: [2, 3], 22: [3, 3], 23: [4, 3], 24: [5, 3], 25: [6, 3], 26: [7, 3], 27: [8, 3], 28: [9, 3], 29: [10, 3], 30: [11, 3], 31: [12, 3], 32: [13, 3], 33: [14, 3], 34: [15, 3], 35: [16, 3], 36: [17, 3],
+                37: [0, 4], 38: [1, 4], 39: [2, 4], 40: [3, 4], 41: [4, 4], 42: [5, 4], 43: [6, 4], 44: [7, 4], 45: [8, 4], 46: [9, 4], 47: [10, 4], 48: [11, 4], 49: [12, 4], 50: [13, 4], 51: [14, 4], 52: [15, 4], 53: [16, 4], 54: [17, 4],
+                55: [0, 5], 56: [1, 5], 57: [2, 5], 72: [3, 5], 73: [4, 5], 74: [5, 5], 75: [6, 5], 76: [7, 5], 77: [8, 5], 78: [9, 5], 79: [10, 5], 80: [11, 5], 81: [12, 5], 82: [13, 5], 83: [14, 5], 84: [15, 5], 85: [16, 5], 86: [17, 5],
+                87: [0, 6], 88: [1, 6], 89: [2, 6], 104: [3, 6], 105: [4, 6], 106: [5, 6], 107: [6, 6], 108: [7, 6], 109: [8, 6], 110: [9, 6], 111: [10, 6], 112: [11, 6], 113: [12, 6], 114: [13, 6], 115: [14, 6], 116: [15, 6], 117: [16, 6], 118: [17, 6],
+                58: [3, 8], 59: [4, 8], 60: [5, 8], 61: [6, 8], 62: [7, 8], 63: [8, 8], 64: [9, 8], 65: [10, 8], 66: [11, 8], 67: [12, 8], 68: [13, 8], 69: [14, 8], 70: [15, 8], 71: [16, 8],
+                90: [3, 9], 91: [4, 9], 92: [5, 9], 93: [6, 9], 94: [7, 9], 95: [8, 9], 96: [9, 9], 97: [10, 9], 98: [11, 9], 99: [12, 9], 100: [13, 9], 101: [14, 9], 102: [15, 9], 103: [16, 9]
+            };
+
+            objects.forEach((object, i) => {
+                const element = elements[i];
+                const pos = positions[element.number];
+                const target = new THREE.Object3D();
+                
+                if (pos) {
+                    target.position.x = (pos[0] - 8.5) * 120;
+                    target.position.y = -(pos[1] - 4.5) * 160;
+                    target.position.z = 0;
+                }
+                targets.table.push(target);
+            });
+        }
+
+        function calculateSpherePositions() {
+            const vector = new THREE.Vector3();
+            objects.forEach((object, i) => {
+                const phi = Math.acos(-1 + (2 * i) / objects.length);
+                const theta = Math.sqrt(objects.length * Math.PI) * phi;
+                const target = new THREE.Object3D();
+                target.position.setFromSphericalCoords(1000, phi, theta);
+                vector.copy(target.position).multiplyScalar(2);
+                target.lookAt(vector);
+                targets.sphere.push(target);
+            });
+        }
+
+        function calculateHelixPositions() {
+            const vector = new THREE.Vector3();
+            objects.forEach((object, i) => {
+                const theta = i * 0.213 + Math.PI;
+                const y = -(i * 8) + 450;
+                const target = new THREE.Object3D();
+                target.position.setFromCylindricalCoords(1000, theta, y);
+                vector.x = target.position.x * 2;
+                vector.y = target.position.y;
+                vector.z = target.position.z * 2;
+                target.lookAt(vector);
+                targets.helix.push(target);
+            });
+        }
+
+        function calculateGridPositions() {
+            objects.forEach((object, i) => {
+                const target = new THREE.Object3D();
+                target.position.x = ((i % 5) * 350) - 700;
+                target.position.y = (-(Math.floor(i / 5) % 5) * 350) + 700;
+                target.position.z = (Math.floor(i / 25)) * 800 - 1600;
+                targets.grid.push(target);
+            });
+        }
+
+        function transform(view, duration = 1500) {
+            currentView = view;
+            const targetList = targets[view];
+            
+            objects.forEach((object, i) => {
+                const target = targetList[i];
+                if (!target) return;
+                
+                new TWEEN.Tween(object.position)
+                    .to({ x: target.position.x, y: target.position.y, z: target.position.z }, duration)
+                    .easing(TWEEN.Easing.Exponential.InOut)
+                    .start();
+
+                new TWEEN.Tween(object.rotation)
+                    .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, duration)
+                    .easing(TWEEN.Easing.Exponential.InOut)
+                    .start();
+            });
+
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === view) btn.classList.add('active');
+            });
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            if (isDragging) {
+                const deltaX = event.clientX - previousMousePosition.x;
+                const deltaY = event.clientY - previousMousePosition.y;
+                
+                tableGroup.rotation.y += deltaX * 0.005;
+                tableGroup.rotation.x += deltaY * 0.005;
+                
+                previousMousePosition = { x: event.clientX, y: event.clientY };
+            }
+        }
+
+        function onMouseDown(event) {
+            if (event.target.closest('.ui-layer')) return;
+            isDragging = true;
+            previousMousePosition = { x: event.clientX, y: event.clientY };
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        function onClick(event) {
+            if (event.target.closest('.ui-layer')) return;
+            if (isDragging) return;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(tableGroup.children, true);
+            
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                if (object.userData.element) {
+                    showElementDetail(object.userData.element);
+                }
+            }
+        }
+
+        function onTouchStart(event) {
+            if (event.target.closest('.ui-layer')) return;
+            if (event.touches.length === 1) {
+                isDragging = false;
+                previousMousePosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+                
+                mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+            }
+        }
+
+        function onTouchMove(event) {
+            if (event.touches.length === 1) {
+                const deltaX = event.touches[0].clientX - previousMousePosition.x;
+                const deltaY = event.touches[0].clientY - previousMousePosition.y;
+                
+                if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+                    isDragging = true;
+                }
+                
+                tableGroup.rotation.y += deltaX * 0.01;
+                tableGroup.rotation.x += deltaY * 0.01;
+                
+                previousMousePosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            }
+        }
+
+        function onTouchEnd(event) {
+            if (!isDragging && event.changedTouches.length === 1) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(tableGroup.children, true);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    if (object.userData.element) {
+                        showElementDetail(object.userData.element);
+                    }
+                }
+            }
+            isDragging = false;
+        }
+
+        function onWheel(event) {
+            event.preventDefault();
+            const zoomSpeed = 0.001;
+            targetCameraZ += event.deltaY * targetCameraZ * zoomSpeed;
+            targetCameraZ = Math.max(50, Math.min(10000, targetCameraZ));
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function showElementDetail(element) {
+            const catData = categoryColors[element.category];
+            
+            document.getElementById('detailNumber').textContent = element.number;
+            document.getElementById('detailSymbol').textContent = element.symbol;
+            document.getElementById('detailName').textContent = element.name;
+            document.getElementById('detailCategory').textContent = catData.name;
+            document.getElementById('detailMass').textContent = element.mass;
+            document.getElementById('detailConfig').textContent = element.config;
+            document.getElementById('detailElectro').textContent = element.electro;
+            document.getElementById('detailRadius').textContent = element.radius + ' pm';
+            document.getElementById('detailDiscovery').textContent = element.discovery;
+            document.getElementById('detailDesc').textContent = element.desc;
+            
+            const usesList = document.getElementById('detailUses');
+            usesList.innerHTML = '';
+            element.uses.forEach(use => {
+                const li = document.createElement('li');
+                li.textContent = '• ' + use;
+                usesList.appendChild(li);
+            });
+            
+            document.getElementById('detailSymbol').style.color = catData.hex;
+            document.getElementById('detailCategory').style.color = catData.hex;
+            document.getElementById('detailGlow').style.background = `linear-gradient(135deg, ${catData.hex}, #000)`;
+            
+            createAtomicModel(element.number, catData.hex);
+            document.getElementById('detailPanel').classList.add('open');
+        }
+
+        function createAtomicModel(atomicNumber, color) {
+            const container = document.getElementById('atomicModel');
+            container.innerHTML = '';
+            
+            const shells = [2, 8, 18, 32, 32, 18, 8];
+            let electrons = atomicNumber;
+            
+            for (let i = 0; i < shells.length && electrons > 0; i++) {
+                const shellElectrons = Math.min(electrons, shells[i]);
+                electrons -= shellElectrons;
+                
+                const orbit = document.createElement('div');
+                orbit.className = 'orbit';
+                orbit.style.width = (80 + i * 30) + 'px';
+                orbit.style.height = (80 + i * 30) + 'px';
+                orbit.style.top = (100 - 40 - i * 15) + 'px';
+                orbit.style.left = (100 - 40 - i * 15) + 'px';
+                orbit.style.animationDuration = (8 - i * 0.5) + 's';
+                orbit.style.borderColor = color + '60';
+                
+                for (let j = 0; j < shellElectrons; j++) {
+                    const angle = (j / shellElectrons) * Math.PI * 2;
+                    const electron = document.createElement('div');
+                    electron.className = 'electron';
+                    electron.style.background = color;
+                    electron.style.boxShadow = `0 0 15px ${color}, 0 0 30px ${color}`;
+                    const radius = 40 + i * 15;
+                    electron.style.left = (radius + Math.cos(angle) * radius - 5) + 'px';
+                    electron.style.top = (radius + Math.sin(angle) * radius - 5) + 'px';
+                    orbit.appendChild(electron);
+                }
+                
+                container.appendChild(orbit);
+            }
+            
+            const nucleus = document.createElement('div');
+            nucleus.style.position = 'absolute';
+            nucleus.style.width = '24px';
+            nucleus.style.height = '24px';
+            nucleus.style.background = `radial-gradient(circle, ${color}, #000)`;
+            nucleus.style.borderRadius = '50%';
+            nucleus.style.top = '88px';
+            nucleus.style.left = '88px';
+            nucleus.style.boxShadow = `0 0 30px ${color}`;
+            container.appendChild(nucleus);
+        }
+
+        // Search functionality
+        function setupSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const searchResults = document.getElementById('searchResults');
+            
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                searchResults.innerHTML = '';
+                
+                if (query.length === 0) return;
+                
+                const matches = elements.filter(el => 
+                    el.name.toLowerCase().includes(query) ||
+                    el.symbol.toLowerCase().includes(query) ||
+                    el.number.toString() === query
+                );
+                
+                matches.forEach(el => {
+                    const catData = categoryColors[el.category];
+                    const div = document.createElement('div');
+                    div.className = 'search-result-item p-3 rounded-lg cursor-pointer flex items-center gap-4 border border-white/10';
+                    div.innerHTML = `
+                        <div class="text-3xl font-bold" style="color: ${catData.hex}; text-shadow: 0 0 10px ${catData.hex};">${el.symbol}</div>
+                        <div>
+                            <div class="font-bold text-white">${el.name}</div>
+                            <div class="text-sm text-gray-400">Atomic #${el.number} • ${catData.name}</div>
+                        </div>
+                    `;
+                    div.addEventListener('click', () => {
+                        showElementDetail(el);
+                        document.getElementById('searchPanel').classList.remove('open');
+                        searchInput.value = '';
+                        searchResults.innerHTML = '';
+                    });
+                    searchResults.appendChild(div);
+                });
+            });
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            
+            // Frame skipping for performance
+            const delta = time - lastFrameTime;
+            if (delta < 16) return; // Cap at ~60fps
+            lastFrameTime = time;
+            
+            TWEEN.update();
+            
+            // Smooth camera zoom
+            camera.position.z += (targetCameraZ - camera.position.z) * 0.1;
+            
+            // Animate stars with time uniform
+            if (starField) {
+                starField.material.uniforms.time.value = time * 0.001;
+                starField.rotation.y += 0.0001;
+            }
+            
+            // Slow nebula rotation
+            if (nebulaField) {
+                nebulaField.rotation.y -= 0.00005;
+                nebulaField.rotation.x += 0.00002;
+            }
+            
+            // Gentle table rotation only when not interacting
+            if (!isDragging && currentView === 'table') {
+                tableGroup.rotation.y += 0.0001;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // UI Event Listeners
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                transform(e.target.dataset.view);
+            });
+        });
+
+        document.querySelectorAll('.category-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const category = e.target.dataset.category;
+                document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                objects.forEach((object, i) => {
+                    const element = elements[i];
+                    const mesh = object.children[0];
+                    
+                    if (category === 'all' || element.category === category) {
+                        mesh.visible = true;
+                        mesh.material.opacity = 1;
+                    } else {
+                        mesh.visible = false;
+                    }
+                });
+            });
+        });
+
+        document.getElementById('closeDetail').addEventListener('click', () => {
+            document.getElementById('detailPanel').classList.remove('open');
+        });
+
+        // Search panel
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            document.getElementById('searchPanel').classList.add('open');
+            document.getElementById('searchInput').focus();
+        });
+
+        document.getElementById('closeSearch').addEventListener('click', () => {
+            document.getElementById('searchPanel').classList.remove('open');
+        });
+
+        document.getElementById('mobileSearchBtn').addEventListener('click', () => {
+            document.getElementById('searchPanel').classList.add('open');
+            document.getElementById('searchInput').focus();
+        });
+
+        // Mobile controls
+        document.getElementById('mobileFilterBtn').addEventListener('click', () => {
+            document.getElementById('mobileFilterModal').classList.remove('hidden');
+            document.getElementById('mobileFilterModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('mobileFilterContent').classList.remove('translate-y-full');
+            }, 10);
+        });
+
+        document.getElementById('closeMobileFilter').addEventListener('click', () => {
+            document.getElementById('mobileFilterContent').classList.add('translate-y-full');
+            setTimeout(() => {
+                document.getElementById('mobileFilterModal').classList.add('hidden');
+                document.getElementById('mobileFilterModal').classList.remove('flex');
+            }, 300);
+        });
+
+        document.getElementById('mobileResetBtn').addEventListener('click', () => {
+            tableGroup.rotation.set(0, 0, 0);
+            targetCameraZ = 2500;
+            transform('table');
+        });
+
+        document.querySelectorAll('.mobile-cat').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.mobile-cat').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                const category = e.target.dataset.category;
+                objects.forEach((object, i) => {
+                    const element = elements[i];
+                    const mesh = object.children[0];
+                    
+                    if (category === 'all' || element.category === category) {
+                        mesh.visible = true;
+                        mesh.material.opacity = 1;
+                    } else {
+                        mesh.visible = false;
+                    }
+                });
+                
+                document.getElementById('closeMobileFilter').click();
+            });
+        });
+
+        // Initialize
+        init();
+        setupSearch();
+    </script>
+</body>
+</html>
